@@ -18,7 +18,7 @@ print("Required modules imported.")
 # This directory should contain the models downloaded from the model zoo. To run this 
 #   tutorial, make sure there is a 'squeezenet' directory at this location that 
 #   contains both the 'init_net.pb' and 'predict_net.pb'
-CAFFE_MODELS = "/home/ashish/work/caffe2-integration/models"
+CAFFE_MODELS = "/home/ashish/work/caffe2-integration/models/caffe2"
 
 # Some sample images you can try, or use any URL to a regular image.
 # IMAGE_LOCATION = "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Whole-Lemon.jpg/1235px-Whole-Lemon.jpg"
@@ -148,6 +148,8 @@ pyplot.show()
 device_opts = caffe2_pb2.DeviceOption()
 device_opts.device_type = caffe2_pb2.HIP
 device_opts.hip_gpu_id = 0
+engine_list = ['MIOPEN', '']
+C.set_global_engine_pref({caffe2_pb2.HIP : engine_list})
 
 C.feed_blob('data', img, device_opts.SerializeToString())
 
