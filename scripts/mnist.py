@@ -19,14 +19,17 @@
 # First, let's import the necessities.
 
 # In[1]:
-
-
+#import Tkinter
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot
 import numpy as np
 import os
 import shutil
 import caffe2.python.predictor.predictor_exporter as pe
-
+import pdb
+from caffe2.proto import caffe2_pb2
+import caffe2.python._import_c_extension as C
 
 from caffe2.python import (
     brew,
@@ -47,6 +50,11 @@ print("Necessities imported!")
 # If False, a multilayer perceptron model is used
 USE_LENET_MODEL = True
 
+device_opts = caffe2_pb2.DeviceOption()
+device_opts.device_type = caffe2_pb2.HIP
+device_opts.hip_gpu_id = 0
+engine_list = ['MIOPEN', '']
+C.set_global_engine_pref({caffe2_pb2.HIP : engine_list})
 
 # We will track statistics during the training time and store these on disk in a local folder. We need to set up a data folder for the data and a root folder for the stats. You should already have these folders, and in the data folder the MNIST dataset should be setup as a lmdb database for both the training set and the test set for this tutorial. 
 
@@ -64,7 +72,7 @@ def DownloadResource(url, path):
     print("Completed download and extraction.")
     
     
-current_folder = os.path.join(os.path.expanduser('~'), 'caffe2_notebooks')
+current_folder = '/data/test_models/models/LeNet/'
 data_folder = os.path.join(current_folder, 'tutorial_data', 'mnist')
 root_folder = os.path.join(current_folder, 'tutorial_files', 'tutorial_mnist')
 db_missing = False
@@ -136,9 +144,9 @@ print("workspace root folder:" + root_folder)
 
 def AddInput(model, batch_size, db, db_type):
     # load the data
-    data_uint8, label = brew.db_input(
-        model,
-        blobs_out=["data_uint8", "label"],
+    data_uint8, label = model.TensorProtosDBInput(
+        [],
+        blob_out=["data_uint8", "label"],
         batch_size=batch_size,
         db=db,
         db_type=db_type,
@@ -350,11 +358,11 @@ AddModel(deploy_model, "data")
 
 # In[11]:
 
-
+"""
 from IPython import display
 graph = net_drawer.GetPydotGraph(train_model.net.Proto().op, "mnist", rankdir="LR")
 display.Image(graph.create_png(), width=800)
-
+"""
 
 # Now, the graph above shows everything that is happening in the training phase: the white nodes are the blobs, and the green rectangular nodes are the operators being run. You may have noticed the massive parallel lines like train tracks: these are dependencies from the blobs generated in the forward pass to their backward operators.
 # 
@@ -362,11 +370,11 @@ display.Image(graph.create_png(), width=800)
 
 # In[12]:
 
-
+"""
 graph = net_drawer.GetPydotGraphMinimal(
     train_model.net.Proto().op, "mnist", rankdir="LR", minimal_dependency=True)
 display.Image(graph.create_png(), width=800)
-
+"""
 
 # Now, when we run the network, one way is to directly run it from Python. Remember as we are running the network, we can periodically pull blobs from the network - Let's first show how we do this.
 # 
@@ -377,6 +385,7 @@ display.Image(graph.create_png(), width=800)
 
 print(str(train_model.net.Proto())[:400] + '\n...')
 print(str(train_model.param_init_net.Proto())[:400] + '\n...')
+train_model.RunAllOnGPU()
 
 
 # Next we will run the training procedure. Please note that this process will take a while to run. Keep an eye on the asterisk (In [\*]) or other IPython indicators that the code block is still running.
@@ -406,21 +415,22 @@ loss = np.zeros(total_iters)
 
 # Now, we will manually run the network for 200 iterations. 
 for i in range(total_iters):
+    #pdb.set_trace()
+    print('iteration: {}'.format(i))
     workspace.RunNet(train_model.net)
     accuracy[i] = workspace.blobs['accuracy']
     loss[i] = workspace.blobs['loss']
-
 # After the execution is done, let's plot the values.
 pyplot.plot(loss, 'b')
 pyplot.plot(accuracy, 'r')
 pyplot.legend(('Loss', 'Accuracy'), loc='upper right')
-
+pyplot.savefig(current_folder+'tutorial_files/results.png')
 
 # Now we can sample some of the data and predictions. 
 
 # In[15]:
 
-
+"""
 # Let's look at some of the data.
 pyplot.figure()
 data = workspace.FetchBlob('data')
@@ -478,8 +488,7 @@ print('test_accuracy: %f' % test_accuracy.mean())
 pe_meta = pe.PredictorExportMeta(
     predict_net=deploy_model.net.Proto(),
     parameters=[str(b) for b in deploy_model.params], 
-    inputs=["data"],
-    outputs=["softmax"],
+    inputs=["data"],    outputs=["softmax"],
 )
 
 # save the model to a file. Use minidb as the file format
@@ -523,3 +532,4 @@ pyplot.title('Prediction for the first image')
 
 
 # This concludes the MNIST tutorial. We hope this tutorial highlighted some of Caffe2's features and how easy it is to create a simple MLP or CNN model.
+"""
