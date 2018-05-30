@@ -577,6 +577,7 @@ def Inception(order, gpu_engine_ws):
     model.net.AveragedLoss(xent, "loss")
     return model, 224
 def Resnet50(order,gpu_engine_ws):
+    """
     my_arg_scope = {
         'order': order,
         'use_gpu_engine': True,
@@ -596,6 +597,46 @@ def Resnet50(order,gpu_engine_ws):
     xent = model.net.LabelCrossEntropy([pred, "label"], "xent")
     model.net.AveragedLoss(xent, "loss")
     return model,224
+    """
+    device_opts = caffe2_pb2.DeviceOption()
+    device_opts.device_type = caffe2_pb2.HIP
+    device_opts.hip_gpu_id = 0
+
+    INIT_NET_PB = '/work/models/resnet50/init_net.pb'
+    PREDICT_NET_PB = '/work/models/resnet50/predict_net.pb'
+    init_def = caffe2_pb2.NetDef()
+    with open(INIT_NET_PB, 'rb') as f:
+        init_def.ParseFromString(f.read())
+        init_def.device_option.CopyFrom(device_opts)
+
+    net_def = caffe2_pb2.NetDef()
+    with open(PREDICT_NET_PB, 'rb') as f:
+        net_def.ParseFromString(f.read())
+        net_def.device_option.CopyFrom(device_opts)
+
+    init_net = core.Net(init_def)
+    predict_net = core.Net(net_def)
+    for op in init_net.Proto().op:
+        op.device_option.CopyFrom(device_opts)
+    for op in predict_net.Proto().op:
+        op.device_option.CopyFrom(device_opts)
+    my_arg_scope = {
+        'order': order,
+        'use_gpu_engine': True,
+        'gpu_engine_exhaustive_search': True,
+    }
+    if gpu_engine_ws:
+        my_arg_scope['ws_nbytes_limit'] = gpu_engine_ws
+    model = model_helper.ModelHelper(
+        name="resnet50",
+        arg_scope=my_arg_scope,
+    )
+
+    model.param_init_net = init_net
+    model.net = predict_net
+    xent = model.net.LabelCrossEntropy(["gpu_0/softmax", "label"], "xent")
+    model.net.AveragedLoss(xent, "loss")
+    return model, 224
 
 def Inception_v2(order,gpu_engine_ws):
     device_opts = caffe2_pb2.DeviceOption()
